@@ -75,7 +75,10 @@ int main(int argc, char ** argv) {
 
     if (!dst.hasNormals()) {
         std::cout << "Input cloud is empty or does not have normals!" << std::endl;
-        return 0;
+        dst.estimateNormalsKNN (100);
+        //src.estimateNormalsKNN (100);
+        std::cout << dst.hasNormals()<<"\n";
+        //return 0;
     }
 
     generate_input_data(dst, src, tf_ref);

@@ -2,6 +2,7 @@
 
 #include <cilantro/correspondence_search/common_transformable_feature_adaptors.hpp>
 #include <cilantro/correspondence_search/correspondence_search_kd_tree.hpp>
+#include <cilantro/correspondence_search/correspondence_search_kd_tree_feature.hpp>
 #include <cilantro/correspondence_search/correspondence_search_projective.hpp>
 #include <cilantro/registration/icp_single_transform_point_to_point_metric.hpp>
 #include <cilantro/registration/icp_single_transform_combined_metric.hpp>
@@ -155,6 +156,37 @@ namespace cilantro {
             RBFKernelWeightEvaluator<typename TransformT::Scalar,typename TransformT::Scalar,true> reg_weight_eval_;
         };
 
+        //added by fabian
+        template <class TransformT, class CorrSearchT>
+        class FeatureombinedMetricSparseWarpFieldICPEntities {
+        public:
+            EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+            FeatureombinedMetricSparseWarpFieldICPEntities(const ConstVectorSetMatrixMap<typename TransformT::Scalar,TransformT::Dim> &dst_points,
+                                                            const ConstVectorSetMatrixMap<typename TransformT::Scalar,TransformT::Dim> &src_points,
+                                                            const Eigen::MatrixXf &dst_feat,
+                                                            const Eigen::MatrixXf &src_feat,
+                                                            int k,
+                                                            double max_feat_dist)
+                    : dst_feat_(dst_points), src_feat_(src_points), dst_feat_mat_(dst_feat), src_feat_mat_(src_feat), k_(k), max_feat_dist_(max_feat_dist),
+                      corr_search_(dst_feat_, src_feat_,dst_feat_mat_,src_feat_mat_, corr_dist_evaluator_,k_,max_feat_dist_)
+            {}
+
+        protected:
+            PointFeaturesAdaptor<typename TransformT::Scalar,TransformT::Dim> dst_feat_;
+            PointFeaturesAdaptor<typename TransformT::Scalar,TransformT::Dim> src_feat_;
+            Eigen::MatrixXf dst_feat_mat_;
+            Eigen::MatrixXf src_feat_mat_;
+            int k_;
+            double max_feat_dist_;
+            DistanceEvaluator<typename TransformT::Scalar,typename TransformT::Scalar> corr_dist_evaluator_;
+            CorrSearchT corr_search_;            
+            UnityWeightEvaluator<typename TransformT::Scalar,typename TransformT::Scalar> point_corr_weight_eval_;
+            UnityWeightEvaluator<typename TransformT::Scalar,typename TransformT::Scalar> plane_corr_weight_eval_;
+            RBFKernelWeightEvaluator<typename TransformT::Scalar,typename TransformT::Scalar,true> control_weight_eval_;
+            RBFKernelWeightEvaluator<typename TransformT::Scalar,typename TransformT::Scalar,true> reg_weight_eval_;
+        };
+
         template <class TransformT, class CorrSearchT>
         class SimpleCombinedMetricSparseWarpFieldICPWrapper : private DefaultCombinedMetricSparseWarpFieldICPEntities<TransformT,CorrSearchT>,
                                                               public DefaultCombinedMetricSparseWarpFieldICP<TransformT,CorrSearchT>
@@ -172,9 +204,34 @@ namespace cilantro {
                       DefaultCombinedMetricSparseWarpFieldICP<TransformT,CorrSearchT>(dst_points, dst_normals, src_points, this->corr_search_, src_to_control_neighborhoods, num_control_nodes, control_regularization_neighborhoods, this->point_corr_weight_eval_, this->plane_corr_weight_eval_, this->control_weight_eval_, this->reg_weight_eval_)
             {}
         };
+        //ADDED BY FABIAN
+        template <class TransformT, class CorrSearchT>
+        class FeatureCombinedMetricSparseWarpFieldICPWrapper : private FeatureombinedMetricSparseWarpFieldICPEntities<TransformT,CorrSearchT>,
+                                                              public DefaultCombinedMetricSparseWarpFieldICP<TransformT,CorrSearchT>
+        {
+        public:
+            EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+            FeatureCombinedMetricSparseWarpFieldICPWrapper(const ConstVectorSetMatrixMap<typename TransformT::Scalar,TransformT::Dim> &dst_points,
+                                                          const ConstVectorSetMatrixMap<typename TransformT::Scalar,TransformT::Dim> &dst_normals,
+                                                          const ConstVectorSetMatrixMap<typename TransformT::Scalar,TransformT::Dim> &src_points,
+                                                          const Eigen::MatrixXf &dst_feat,
+                                                          const Eigen::MatrixXf &src_feat,
+                                                          const std::vector<NeighborSet<typename TransformT::Scalar>> &src_to_control_neighborhoods,
+                                                          size_t num_control_nodes,
+                                                          const std::vector<NeighborSet<typename TransformT::Scalar>> &control_regularization_neighborhoods,
+                                                          int k = 10,
+                                                          double max_feat_dist = 10.0)
+                    : FeatureombinedMetricSparseWarpFieldICPEntities<TransformT,CorrSearchT>(dst_points, src_points,dst_feat,src_feat,k,max_feat_dist),
+                      DefaultCombinedMetricSparseWarpFieldICP<TransformT,CorrSearchT>(dst_points, dst_normals, src_points, this->corr_search_, src_to_control_neighborhoods, num_control_nodes, control_regularization_neighborhoods, this->point_corr_weight_eval_, this->plane_corr_weight_eval_, this->control_weight_eval_, this->reg_weight_eval_)
+            {}
+        };
 
         template <class TransformT>
         using DefaultKDTreeSearch = CorrespondenceSearchKDTree<PointFeaturesAdaptor<typename TransformT::Scalar,TransformT::Dim>,KDTreeDistanceAdaptors::L2,PointFeaturesAdaptor<typename TransformT::Scalar,TransformT::Dim>,DistanceEvaluator<typename TransformT::Scalar,typename TransformT::Scalar>>;
+
+        template <class TransformT>
+        using FeatureKDTreeSearch = CorrespondenceSearchKDTreeFeature<PointFeaturesAdaptor<typename TransformT::Scalar,TransformT::Dim>,KDTreeDistanceAdaptors::L2,PointFeaturesAdaptor<typename TransformT::Scalar,TransformT::Dim>,DistanceEvaluator<typename TransformT::Scalar,typename TransformT::Scalar>>;
 
         template <class TransformT>
         using DefaultProjectiveSearch = CorrespondenceSearchProjective<typename TransformT::Scalar,PointFeaturesAdaptor<typename TransformT::Scalar,3>,DistanceEvaluator<typename TransformT::Scalar,typename TransformT::Scalar>>;
@@ -200,6 +257,10 @@ namespace cilantro {
 
     template <class TransformT>
     using SimpleCombinedMetricSparseWarpFieldICP = internal::SimpleCombinedMetricSparseWarpFieldICPWrapper<TransformT,internal::DefaultKDTreeSearch<TransformT>>;
+
+    //added by fabian
+    template <class TransformT>
+    using FeatureCombinedMetricSparseWarpFieldICP = internal::FeatureCombinedMetricSparseWarpFieldICPWrapper<TransformT,internal::FeatureKDTreeSearch<TransformT>>;
 
     template <class TransformT>
     using SimpleCombinedMetricSparseWarpFieldProjectiveICP = internal::SimpleCombinedMetricSparseWarpFieldICPWrapper<TransformT,internal::DefaultProjectiveSearch<TransformT>>;
@@ -260,6 +321,10 @@ namespace cilantro {
     typedef SimpleCombinedMetricSparseWarpFieldICP<RigidTransform<double,2>> SimpleCombinedMetricSparseRigidWarpFieldICP2d;
     typedef SimpleCombinedMetricSparseWarpFieldICP<RigidTransform<float,3>> SimpleCombinedMetricSparseRigidWarpFieldICP3f;
     typedef SimpleCombinedMetricSparseWarpFieldICP<RigidTransform<double,3>> SimpleCombinedMetricSparseRigidWarpFieldICP3d;
+
+    // adde by fabian
+    typedef FeatureCombinedMetricSparseWarpFieldICP<RigidTransform<float,3>> FeatureCombinedMetricSparseRigidWarpFieldICP3f;
+    typedef FeatureCombinedMetricSparseWarpFieldICP<RigidTransform<double,3>> FeatureCombinedMetricSparseRigidWarpFieldICP3d;
 
     typedef SimpleCombinedMetricSparseWarpFieldICP<AffineTransform<float,2>> SimpleCombinedMetricSparseAffineWarpFieldICP2f;
     typedef SimpleCombinedMetricSparseWarpFieldICP<AffineTransform<double,2>> SimpleCombinedMetricSparseAffineWarpFieldICP2d;

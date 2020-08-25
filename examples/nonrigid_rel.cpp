@@ -32,7 +32,7 @@ int main(int argc, char ** argv) {
 
     cilantro::PointCloud3f dst(argv[1]), src(argv[2]);
 
-
+ 
     if (!dst.hasNormals()) {        
         dst.estimateNormalsKNN (100);
         src.estimateNormalsKNN (100);
@@ -43,8 +43,8 @@ int main(int argc, char ** argv) {
     cilantro::SimpleCombinedMetricRigidICP3f icp_rigid(dst.points, dst.normals, src.points);
 
     // Parameter setting
-    icp_rigid.setMaxNumberOfOptimizationStepIterations(1).setPointToPointMetricWeight(0.5f).setPointToPlaneMetricWeight(0.5f);
-    icp_rigid.correspondenceSearchEngine().setMaxDistance(0.0005f);
+    icp_rigid.setMaxNumberOfOptimizationStepIterations(10).setPointToPointMetricWeight(0.5f).setPointToPlaneMetricWeight(0.9f);
+    icp_rigid.correspondenceSearchEngine().setMaxDistance(0.001f);
     icp_rigid.setConvergenceTolerance(1e-4f).setMaxNumberOfIterations(300);
 
     cilantro::RigidTransform3f tf_est_rigid = icp_rigid.estimate().getTransform();
@@ -52,11 +52,11 @@ int main(int argc, char ** argv) {
 
     // Example 1: Compute a sparsely supported warp field (compute transformations for a sparse set of control nodes)
     // Neighborhood parameters
-    float control_res = 0.001;//0.0025f;
+    float control_res = 0.002;//0.0025f;
     float src_to_control_sigma = 0.5f*control_res;
     float regularization_sigma = 3.0f*control_res;
 
-    float max_correspondence_dist_sq = 0.002f*0.002f;
+    float max_correspondence_dist_sq = 0.01f*0.01f;
 
     // Get a sparse set of control nodes by downsampling
     cilantro::VectorSet<float,3> control_points = cilantro::PointsGridDownsampler3f(src.points, control_res).getDownsampledPoints();
@@ -73,17 +73,23 @@ int main(int argc, char ** argv) {
     timer.start();
 
 //    cilantro::SimpleCombinedMetricSparseAffineWarpFieldICP3f icp(dst.points, dst.normals, src.points, src_to_control_nn, control_points.cols(), regularization_nn);
-    cilantro::SimpleCombinedMetricSparseRigidWarpFieldICP3f icp(dst.points, dst.normals, src.points, src_to_control_nn, control_points.cols(), regularization_nn);
+    //cilantro::SimpleCombinedMetricSparseRigidWarpFieldICP3f icp(dst.points, dst.normals, src.points, src_to_control_nn, control_points.cols(), regularization_nn);
+    Eigen::MatrixXf dst_feat = dst.normals.matrix();
+    Eigen::MatrixXf src_feat = src.normals.matrix();    
+    cilantro::FeatureCombinedMetricSparseRigidWarpFieldICP3f icp(dst.points, dst.normals, src.points,dst_feat,src_feat, src_to_control_nn, control_points.cols(), regularization_nn,10,10.0);
+    std::cout<<"in main\n";
+    //cilantro::SimpleCombinedMetricSparseRigidWarpFieldProjectiveICP3f icp(dst.points, dst.normals, src.points, src_to_control_nn, control_points.cols(), regularization_nn);
 
     // Parameter setting
+    
     icp.correspondenceSearchEngine().setMaxDistance(max_correspondence_dist_sq);
     icp.controlWeightEvaluator().setSigma(src_to_control_sigma);
     icp.regularizationWeightEvaluator().setSigma(regularization_sigma);
-
-    icp.setMaxNumberOfIterations(25).setConvergenceTolerance(2.5e-3f);
+    
+    icp.setMaxNumberOfIterations(25).setConvergenceTolerance(2.5e-4f);
     icp.setMaxNumberOfGaussNewtonIterations(5).setGaussNewtonConvergenceTolerance(5e-4f);
     icp.setMaxNumberOfConjugateGradientIterations(500).setConjugateGradientConvergenceTolerance(1e-5f);
-    icp.setPointToPointMetricWeight(1.0f).setPointToPlaneMetricWeight(1.0f).setStiffnessRegularizationWeight(1.0f);
+    icp.setPointToPointMetricWeight(1.0f).setPointToPlaneMetricWeight(1.0f).setStiffnessRegularizationWeight(0.5f);
     icp.setHuberLossBoundary(1e-2f);
 
     auto tf_est = icp.estimate().getDenseWarpField();
@@ -91,37 +97,37 @@ int main(int argc, char ** argv) {
     timer.stop();
 
 
-//    // Example 2: Compute a densely supported warp field (each point has its own local transformation)
-//    float res = 0.005f;
+   // Example 2: Compute a densely supported warp field (each point has its own local transformation)
+//    float res = 0.0001f;
 //    float regularization_sigma = 3.0f*res;
-//
-//    dst.gridDownsample(res).removeInvalidData();
-//    src.gridDownsample(res).removeInvalidData();
-//
+
+// //    dst.gridDownsample(res).removeInvalidData();
+// //    src.gridDownsample(res).removeInvalidData();
+
 //    float max_correspondence_dist_sq = 0.04f*0.04f;
-//
+
 //    std::vector<cilantro::NeighborSet<float>> regularization_nn;
-//    cilantro::KDTree3f(src.points).search(src.points, cilantro::KNNNeighborhoodSpecification<>(12), regularization_nn);
-//
+//    cilantro::KDTree<float,3>(src.points).search(src.points, cilantro::KNNNeighborhoodSpecification<>(12), regularization_nn);
+
 //    // Perform ICP registration
 //    cilantro::Timer timer;
 //    timer.start();
-//
-////    cilantro::SimpleCombinedMetricDenseAffineWarpFieldICP3f icp(dst.points, dst.normals, src.points, regularization_nn);
+
+// //    cilantro::SimpleCombinedMetricDenseAffineWarpFieldICP3f icp(dst.points, dst.normals, src.points, regularization_nn);
 //    cilantro::SimpleCombinedMetricDenseRigidWarpFieldICP3f icp(dst.points, dst.normals, src.points, regularization_nn);
-//
+
 //    // Parameter setting
 //    icp.correspondenceSearchEngine().setMaxDistance(max_correspondence_dist_sq);
 //    icp.regularizationWeightEvaluator().setSigma(regularization_sigma);
-//
+
 //    icp.setMaxNumberOfIterations(15).setConvergenceTolerance(2.5e-3f);
 //    icp.setMaxNumberOfGaussNewtonIterations(1).setGaussNewtonConvergenceTolerance(5e-4f);
 //    icp.setMaxNumberOfConjugateGradientIterations(500).setConjugateGradientConvergenceTolerance(1e-5f);
 //    icp.setPointToPointMetricWeight(0.1f).setPointToPlaneMetricWeight(1.0f).setStiffnessRegularizationWeight(200.0f);
 //    icp.setHuberLossBoundary(1e-2f);
-//
+
 //    auto tf_est = icp.estimate().getTransform();
-//
+
 //    timer.stop();
 
 
