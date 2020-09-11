@@ -37,7 +37,7 @@ else()
 endif()
 
 # Build options
-option(ENABLE_NATIVE_BUILD_OPTIMIZATIONS "Enable native build optimization flags" ON)
+option(ENABLE_NATIVE_BUILD_OPTIMIZATIONS "Enable native build optimization flags" OFF)
 option(ENABLE_NON_DETERMINISTIC_PARALLELISM "Enable parallelization that may produce non-deterministic results" ON)
 
 # Build library
@@ -57,9 +57,9 @@ if(OpenMP_CXX_FOUND)
 endif()
 
 if (ENABLE_NATIVE_BUILD_OPTIMIZATIONS)
-    target_compile_options(${PROJECT_NAME} PUBLIC -O3 -mtune=native)
+    target_compile_options(${PROJECT_NAME} PRIVATE -O3 -mtune=native)
 else()
-    target_compile_options(${PROJECT_NAME} PUBLIC -O3)
+    target_compile_options(${PROJECT_NAME} PRIVATE -O3)
 endif()
 
 # Configure preprocessor definitions
